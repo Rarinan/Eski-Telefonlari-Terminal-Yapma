@@ -1,2 +1,2 @@
-# Eski-Telefonlar-Terminal-Yapmaya-al-ma
+# Eski-Telefonlar-Terminal-Yapmaya-Calisiyorum
 Eski telefonlarda linuxteki gibi terminal yapmaya çalışıyorum
