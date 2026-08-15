@@ -4,227 +4,351 @@ import java.util.*;
 
 public class MiniLinuxTerminal extends MIDlet implements CommandListener {
     private Display display;
-    private Form form;
-    private TextField inputField;
-    private StringItem outputArea;
-    private Command runCommand, exitCommand;
-    private Random random = new Random();
-
-    private Vector pkgs = new Vector();
-    private Vector files = new Vector();
-    private long startTime;
+    private TerminalCanvas terminalCanvas;
 
     public MiniLinuxTerminal() {
-        startTime = System.currentTimeMillis();
         display = Display.getDisplay(this);
-        form = new Form("TermiSymbian Arch-Linux");
-
-        files.addElement("welcome.txt");
-        files.addElement("projects/");
-
-        // cmatrix varsayılan yüklü gelsin
-        pkgs.addElement("cmatrix");
-
-        outputArea = new StringItem("", "TermiSymbian Arch-Linux v1.0\nType 'help'\n---------------------------\n");
-        inputField = new TextField("archuser@c5-03:~$ ", "", 40, TextField.ANY | TextField.NON_PREDICTIVE);
-
-        runCommand = new Command("Run", Command.OK, 1);
-        exitCommand = new Command("Exit", Command.EXIT, 2);
-
-        form.append(outputArea);
-        form.append(inputField);
-        form.addCommand(runCommand);
-        form.addCommand(exitCommand);
-        form.setCommandListener(this);
+        terminalCanvas = new TerminalCanvas(this);
     }
 
-    protected void startApp() { display.setCurrent(form); }
+    protected void startApp() {
+        display.setCurrent(terminalCanvas);
+    }
+
     protected void pauseApp() {}
     protected void destroyApp(boolean u) {}
 
-    public void commandAction(Command c, Displayable d) {
-        if (c == runCommand) {
-            String cmd = inputField.getString().trim();
-            inputField.setString("");
-            processCommand(cmd);
-        } else if (c == exitCommand) {
-            destroyApp(false);
-            notifyDestroyed();
-        }
-    }
-
-    private String getUptime() {
-        long elapsedSec = (System.currentTimeMillis() - startTime) / 1000;
-        long mins = elapsedSec / 60;
-        long secs = elapsedSec % 60;
-        return (mins > 0) ? (mins + "m " + secs + "s") : (secs + "s");
-    }
-
-    private void processCommand(String fullCmd) {
-        if (fullCmd.length() == 0) return;
-        String cur = outputArea.getText();
-        String res = "";
-        String cmd = fullCmd.toLowerCase().trim();
-
-        // --- CMATRIX ANIMASYONU ---
-        if (cmd.equals("cmatrix")) {
-            if (pkgs.contains("cmatrix")) {
-                MatrixCanvas matrix = new MatrixCanvas(display, form);
-                display.setCurrent(matrix);
-                matrix.start();
-                return;
-            } else {
-                res = "\ncommand not found. Try: pacman -S cmatrix\n";
-            }
-        }
-        // --- PACMAN ---
-        else if (cmd.startsWith("pacman -s ")) {
-            String p = cmd.substring(10).trim();
-            if (p.equals("cmatrix") || p.equals("sl") || p.equals("cowsay")) {
-                if (!pkgs.contains(p)) {
-                    pkgs.addElement(p);
-                    res = "\ndownloading " + p + "... [100%]\ninstalling " + p + "... [100%]\n:: " + p + " installed!\n";
-                } else {
-                    res = "\nwarning: " + p + " is up to date\n";
-                }
-            } else {
-                res = "\nerror: target not found: " + p + "\n";
-            }
-        } 
-        // --- PAKETLER ---
-        else if (cmd.equals("sl")) {
-            res = pkgs.contains("sl") ? "\n  ==== ____====\n _|__|| C5-03  |\n(o)(o)(o)----(o)\nChoo Choo!\n" : "\ncommand not found. Try: pacman -S sl\n";
-        }
-        else if (cmd.equals("cowsay")) {
-            res = pkgs.contains("cowsay") ? "\n < Arch King >\n  \\   ^__^\n   \\  (oo)\n" : "\ncommand not found. Try: pacman -S cowsay\n";
-        }
-        // --- DOSYA SİSTEMİ ---
-        else if (cmd.equals("ls")) {
-            res = "\n";
-            for (int i = 0; i < files.size(); i++) res += files.elementAt(i) + "  ";
-            res += "\n";
-        }
-        else if (cmd.startsWith("mkdir ")) {
-            files.addElement(fullCmd.substring(6).trim() + "/");
-            res = "\n";
-        }
-        else if (cmd.startsWith("touch ")) {
-            files.addElement(fullCmd.substring(6).trim());
-            res = "\n";
-        }
-        else if (cmd.startsWith("cat ")) {
-            String f = fullCmd.substring(4).trim();
-            res = f.equals("welcome.txt") ? "\nWelcome to Nokia C5-03 Arch Linux!\n" : "\ncat: " + f + ": No such file\n";
-        }
-        // --- ARCH FASTFETCH ---
-        else if (cmd.equals("fastfetch") || cmd.equals("neofetch")) {
-            res = "\n  /\\       archuser@c5-03\n" +
-                  " /  \\      --------------\n" +
-                  "/ /\\ \\     OS: Arch Linux ARM (Symbian S60v5)\n" +
-                  "\\ \\/ /     Host: Nokia C5-03\n" +
-                  "  \\/       Kernel: 2.6.28-ARCH\n" +
-                  "           Uptime: " + getUptime() + "\n" +
-                  "           Packages: " + (pkgs.size() + 14) + " (pacman)\n" +
-                  "           Shell: TermiSymbian 1.0\n" +
-                  "           Display: 360x640 3.2\" nHD\n" +
-                  "           WM: KDE Plasma 6.1\n" +
-                  "           Terminal: JavaME-KVM\n" +
-                  "           CPU: ARM1136JF-S @ 600 MHz\n" +
-                  "           GPU: PowerVR SGX530\n" +
-                  "           Memory: 48MB / 128MB\n\n" +
-                  "           [#][#][#][#][#][#][#][#]\n";
-        }
-        else if (cmd.equals("htop")) {
-            long tot = Runtime.getRuntime().totalMemory() / 1024;
-            long free = Runtime.getRuntime().freeMemory() / 1024;
-            long used = tot - free;
-            int cpu = 15 + random.nextInt(30);
-            res = "\nCPU [" + getBar(cpu) + " " + cpu + "%]\nMem[" + getBar((int)(used * 100 / tot)) + " " + used + "K/" + tot + "K]\nPID USER CPU% COMMAND\n 1  arch 15%  JavaJVM\n";
-        }
-        else if (cmd.startsWith("ping ")) {
-            res = "\nPING " + fullCmd.substring(5).trim() + ": 64 bytes time=38ms\n";
-        }
-        else if (cmd.equals("clear")) {
-            outputArea.setText("TermiSymbian Arch-Linux\n---------------------------\n");
-            return;
-        }
-        else if (cmd.equals("help")) {
-            res = "\nCmds: cmatrix, ls, mkdir, touch, cat, pacman -S, fastfetch, htop, ping, clear, whoami, uname\n";
-        }
-        else if (cmd.equals("whoami")) { res = "\narchuser\n"; }
-        else if (cmd.startsWith("uname")) { res = "\nLinux c5-03 2.6.28-ARCH armv6l\n"; }
-        else {
-            res = "\nbash: " + fullCmd + ": command not found\n";
-        }
-
-        outputArea.setText(cur + "archuser@c5-03:~$ " + fullCmd + res + "\n");
-    }
-
-    private String getBar(int p) {
-        int b = p / 10;
-        String r = "";
-        for (int i = 0; i < 10; i++) r += (i < b) ? "|" : ".";
-        return r;
-    }
+    public void commandAction(Command c, Displayable d) {}
 }
 
-// FULLSCREEN CMATRIX ANIMASYON CANVAS'I
-class MatrixCanvas extends Canvas implements Runnable {
-    private Display display;
-    private Displayable lastScreen;
-    private boolean running = true;
-    private Random rand = new Random();
-    private int width, height, numCols;
-    private int[] yPos;
+class TerminalCanvas extends Canvas implements Runnable, CommandListener {
+    private MiniLinuxTerminal midlet;
+    private Vector lines = new Vector();
+    private Vector pkgs = new Vector();
+    private Vector history = new Vector();
+    
+    private String currentInput = "";
+    private boolean cursorVisible = true;
+    private boolean isRunning = false;
+    private long startTime;
+    private Command exitCmd, clearCmd, inputCmd;
+    private Font terminalFont;
 
-    public MatrixCanvas(Display d, Displayable last) {
-        this.display = d;
-        this.lastScreen = last;
+    // Dokunmatik ve Kaydırma Değişkenleri
+    private int startTouchY = 0;
+    private int totalDragDist = 0;
+    private int scrollOffset = 0;
+
+    // CMatrix Modu Değişkenleri
+    private boolean isCmatrixRunning = false;
+    private Random random = new Random();
+    private int[] matrixCols;
+
+    public TerminalCanvas(MiniLinuxTerminal midlet) {
+        this.midlet = midlet;
+        this.startTime = System.currentTimeMillis();
+        
+        try {
+            terminalFont = Font.getFont(Font.FACE_MONOSPACE, Font.STYLE_PLAIN, Font.SIZE_SMALL);
+        } catch (Exception e) {
+            terminalFont = Font.getDefaultFont();
+        }
+
+        // Varsayılan Paketler
+        pkgs.addElement("base");
+        pkgs.addElement("bash");
+        pkgs.addElement("net-tools");
+
+        // Başlangıç Yazıları
+        lines.addElement("TermiSymbian Arch-Linux v2.0 (TTY1)");
+        lines.addElement("Type 'help' for available commands.");
+        lines.addElement("------------------------------------");
+        lines.addElement("");
+
+        inputCmd = new Command("Komut Yaz", Command.OK, 1);
+        clearCmd = new Command("Temizle", Command.SCREEN, 2);
+        exitCmd = new Command("Çıkış", Command.EXIT, 3);
+        
+        addCommand(inputCmd);
+        addCommand(clearCmd);
+        addCommand(exitCmd);
+        setCommandListener(this);
+    }
+
+    protected void showNotify() {
         setFullScreenMode(true);
-        width = getWidth();
-        height = getHeight();
-        numCols = width / 14;
-        if (numCols <= 0) numCols = 10;
-        yPos = new int[numCols];
-        for (int i = 0; i < numCols; i++) {
-            yPos[i] = rand.nextInt(height);
+        if (!isRunning) {
+            isRunning = true;
+            new Thread(this).start();
         }
     }
 
-    public void start() {
-        Thread t = new Thread(this);
-        t.start();
+    protected void hideNotify() {
+        isRunning = false;
     }
 
     public void run() {
-        while (running) {
+        while (isRunning) {
+            if (isCmatrixRunning) {
+                updateCmatrix();
+            } else {
+                cursorVisible = !cursorVisible;
+            }
             repaint();
-            try {
-                Thread.sleep(70);
-            } catch (Exception e) {}
+            try { Thread.sleep(isCmatrixRunning ? 80 : 500); } catch (Exception e) {}
         }
     }
 
     protected void paint(Graphics g) {
-        g.setColor(0, 0, 0);
-        g.fillRect(0, 0, width, height);
+        try {
+            int width = getWidth();
+            int height = getHeight();
 
-        g.setColor(0, 255, 0);
+            // Simsiyah Arka Plan
+            g.setColor(0, 0, 0);
+            g.fillRect(0, 0, width, height);
+
+            // CMatrix Modu Aktifse
+            if (isCmatrixRunning) {
+                drawCmatrix(g, width, height);
+                return;
+            }
+
+            // Normal Terminal Modu
+            g.setColor(0, 255, 65);
+            g.setFont(terminalFont);
+
+            int lineHeight = terminalFont.getHeight() + 2;
+            if (lineHeight <= 0) lineHeight = 14;
+
+            int maxLines = (height - 20) / lineHeight;
+            if (maxLines <= 0) maxLines = 1;
+
+            int maxScroll = Math.max(0, lines.size() - maxLines);
+            if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+            if (scrollOffset < 0) scrollOffset = 0;
+
+            int startIdx = Math.max(0, lines.size() - maxLines - scrollOffset);
+            int endIdx = Math.min(lines.size(), startIdx + maxLines);
+
+            int y = 5;
+
+            for (int i = startIdx; i < endIdx; i++) {
+                g.drawString((String) lines.elementAt(i), 5, y, Graphics.TOP | Graphics.LEFT);
+                y += lineHeight;
+            }
+
+            // Komut İstemi ve İmleç
+            String prompt = "archuser@c5-03:~$ " + currentInput + (cursorVisible ? "_" : " ");
+            g.setColor(255, 255, 255);
+            g.drawString(prompt, 5, y, Graphics.TOP | Graphics.LEFT);
+
+        } catch (Exception e) {}
+    }
+
+    // CMatrix Çizim Fonksiyonu
+    private void drawCmatrix(Graphics g, int w, int h) {
+        g.setFont(terminalFont);
+        int charW = terminalFont.charWidth('A');
+        if (charW <= 0) charW = 10;
+        int numCols = w / charW;
+
+        if (matrixCols == null || matrixCols.length != numCols) {
+            matrixCols = new int[numCols];
+            for (int i = 0; i < numCols; i++) {
+                matrixCols[i] = random.nextInt(h);
+            }
+        }
+
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*";
         for (int i = 0; i < numCols; i++) {
-            char ch = (char) (33 + rand.nextInt(90));
-            g.drawString("" + ch, i * 14, yPos[i], Graphics.TOP | Graphics.LEFT);
-            yPos[i] += 16;
-            if (yPos[i] > height) {
-                yPos[i] = 0;
+            int x = i * charW;
+            int y = matrixCols[i];
+
+            g.setColor(255, 255, 255);
+            char ch = chars.charAt(random.nextInt(chars.length()));
+            g.drawString(String.valueOf(ch), x, y, Graphics.TOP | Graphics.LEFT);
+
+            g.setColor(0, 255, 65);
+            for (int j = 1; j <= 5; j++) {
+                char prevCh = chars.charAt(random.nextInt(chars.length()));
+                g.drawString(String.valueOf(prevCh), x, y - (j * 12), Graphics.TOP | Graphics.LEFT);
             }
         }
     }
 
-    protected void keyPressed(int keyCode) { stopAndReturn(); }
-    protected void pointerPressed(int x, int y) { stopAndReturn(); }
+    private void updateCmatrix() {
+        if (matrixCols == null) return;
+        int h = getHeight();
+        for (int i = 0; i < matrixCols.length; i++) {
+            matrixCols[i] += 12;
+            if (matrixCols[i] > h + 60) {
+                matrixCols[i] = 0;
+            }
+        }
+    }
 
-    private void stopAndReturn() {
-        running = false;
-        display.setCurrent(lastScreen);
+    // Dokunma Başlangıcı
+    protected void pointerPressed(int x, int y) {
+        if (isCmatrixRunning) {
+            isCmatrixRunning = false; // Ekrana dokunarak CMatrix'ten çık
+            repaint();
+            return;
+        }
+        startTouchY = y;
+        totalDragDist = 0;
+    }
+
+    // Parmağı Kaydırma (Scroll)
+    protected void pointerDragged(int x, int y) {
+        if (isCmatrixRunning) return;
+
+        int dy = y - startTouchY;
+        totalDragDist += Math.abs(dy);
+
+        int lineHeight = terminalFont.getHeight() + 2;
+        if (lineHeight <= 0) lineHeight = 14;
+
+        int linesMoved = dy / lineHeight;
+        if (linesMoved != 0) {
+            scrollOffset += linesMoved;
+            startTouchY = y;
+            repaint();
+        }
+    }
+
+    // Dokunma Bitişi
+    protected void pointerReleased(int x, int y) {
+        if (isCmatrixRunning) return;
+        if (totalDragDist < 15) {
+            openInputBox();
+        }
+    }
+
+    private void openInputBox() {
+        final TextBox tb = new TextBox("Komut Girin:", "", 100, TextField.ANY);
+        final Command okCmd = new Command("Gönder", Command.OK, 1);
+        final Command cancelCmd = new Command("İptal", Command.CANCEL, 2);
+        
+        tb.addCommand(okCmd);
+        tb.addCommand(cancelCmd);
+        
+        tb.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == okCmd) {
+                    String input = tb.getString();
+                    if (input != null && input.trim().length() > 0) {
+                        executeCommand(input.trim());
+                        history.addElement(input.trim());
+                    }
+                }
+                Display.getDisplay(midlet).setCurrent(TerminalCanvas.this);
+            }
+        });
+        
+        Display.getDisplay(midlet).setCurrent(tb);
+    }
+
+    private void executeCommand(String fullCmd) {
+        lines.addElement("archuser@c5-03:~$ " + fullCmd);
+        String cmd = fullCmd.toLowerCase().trim();
+
+        if (cmd.startsWith("pacman -s ")) handlePacman(cmd);
+        else if (cmd.equals("cmatrix")) handleCmatrix();
+        else if (cmd.equals("fastfetch") || cmd.equals("neofetch")) handleFetch();
+        else if (cmd.equals("htop")) handleHtop();
+        else if (cmd.equals("netstat")) handleNetstat();
+        else if (cmd.equals("free") || cmd.equals("free -h")) handleFree();
+        else if (cmd.equals("uptime")) lines.addElement("Uptime: " + getUptime());
+        else if (cmd.equals("whoami")) lines.addElement("archuser");
+        else if (cmd.equals("uname -a")) lines.addElement("Linux arch-c503 6.1.0-arch1-1 armv6l GNU/Linux");
+        else if (cmd.equals("ls")) lines.addElement("welcome.txt   notes.txt   script.sh");
+        else if (cmd.equals("clear")) lines.removeAllElements();
+        else if (cmd.equals("help")) {
+            lines.addElement("Available: pacman -S, cmatrix, fastfetch, htop,");
+            lines.addElement("           netstat, free, uptime, ls, clear, whoami");
+        } else {
+            lines.addElement("bash: " + fullCmd + ": command not found");
+        }
+        lines.addElement("");
+        
+        scrollOffset = 0;
+        repaint();
+    }
+
+    private String getUptime() {
+        long sec = (System.currentTimeMillis() - startTime) / 1000;
+        return (sec / 60) + "m " + (sec % 60) + "s";
+    }
+
+    private void handlePacman(String c) {
+        String p = c.substring(10).trim();
+        if (pkgs.contains(p)) {
+            lines.addElement("warning: " + p + " is up to date -- skipping");
+            return;
+        }
+        pkgs.addElement(p);
+        lines.addElement(":: Resolving dependencies...");
+        lines.addElement(":: Downloading " + p + " (1.2 MB)...");
+        lines.addElement(":: Installing " + p + "...");
+        lines.addElement(":: " + p + " installed successfully!");
+    }
+
+    private void handleCmatrix() {
+        if (!pkgs.contains("cmatrix")) {
+            lines.addElement("Error: cmatrix not installed. Try: pacman -S cmatrix");
+            return;
+        }
+        isCmatrixRunning = true;
+    }
+
+    private void handleFetch() {
+        if (!pkgs.contains("neofetch") && !pkgs.contains("fastfetch")) {
+            lines.addElement("Error: fastfetch not installed. Try: pacman -S fastfetch");
+            return;
+        }
+        lines.addElement("  /\\       archuser@Nokia-C5-03");
+        lines.addElement(" /  \\      --------------------");
+        lines.addElement("/ /\\ \\     OS: Arch Linux ARM");
+        lines.addElement("\\ \\/ /     Kernel: 6.1.0-ARCH");
+        lines.addElement("  \\/       Uptime: " + getUptime());
+        lines.addElement("           Packages: " + pkgs.size() + " (pacman)");
+        lines.addElement("           Shell: TermiSymbian v2.0");
+        lines.addElement("           CPU: ARM1136JF-S @ 600MHz");
+        lines.addElement("           RAM: " + (Runtime.getRuntime().totalMemory() / 1024) + "KB / 128MB");
+    }
+
+    private void handleHtop() {
+        if (!pkgs.contains("htop")) {
+            lines.addElement("Error: htop not installed. Try: pacman -S htop");
+            return;
+        }
+        long tot = Runtime.getRuntime().totalMemory() / 1024;
+        long free = Runtime.getRuntime().freeMemory() / 1024;
+        lines.addElement("CPU [||||||||||||||...... 42.0%]");
+        lines.addElement("Mem [" + (tot - free) + "K/" + tot + "K]");
+        lines.addElement("PID USER  CPU% COMMAND");
+        lines.addElement("  1 root   1%  init");
+        lines.addElement("  2 arch  41%  java_vm");
+    }
+
+    private void handleNetstat() {
+        lines.addElement("Proto Local Address      Foreign Address    State");
+        lines.addElement("tcp   192.168.1.105:443  104.26.10.23:80    ESTABLISHED");
+        lines.addElement("tcp   127.0.0.1:8080     0.0.0.0:*          LISTEN");
+        lines.addElement("udp   0.0.0.0:68         0.0.0.0:*");
+    }
+
+    private void handleFree() {
+        long tot = Runtime.getRuntime().totalMemory() / 1024;
+        long free = Runtime.getRuntime().freeMemory() / 1024;
+        lines.addElement("      total    used    free");
+        lines.addElement("Mem:  " + tot + "K   " + (tot - free) + "K   " + free + "K");
+    }
+
+    public void commandAction(Command c, Displayable d) {
+        if (c == exitCmd) midlet.notifyDestroyed();
+        else if (c == clearCmd) { lines.removeAllElements(); scrollOffset = 0; repaint(); }
+        else if (c == inputCmd) { openInputBox(); }
     }
 }
